@@ -8,7 +8,7 @@ import useAuthStore from '../stores/useAuthStore';
 
 // F6.1: React Hook Form with regex, custom rules
 const registerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').regex(/^[a-zA-Z\s]+$/, 'Name must only contain letters'),
+  name: z.string().min(2, 'Name must be at least 2 characters').regex(/^[a-zA-Z\u0E00-\u0E7F\s]+$/, 'Name must contain letters only (Thai or English)'),
   email: z.string().email('Valid email is required'),
   password: z.string().min(6, 'Password must be at least 6 characters').regex(/(?=.*[0-9])/, 'Password must contain at least one number'),
   phone: z.string().optional(),

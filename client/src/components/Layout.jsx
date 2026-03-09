@@ -4,7 +4,7 @@ import useAuthStore from '../stores/useAuthStore';
 import useThemeStore from '../stores/useThemeStore';
 import useCartStore from '../stores/useCartStore';
 import API from '../utils/api';
-import { HiOutlineHome, HiOutlineUserGroup, HiOutlineAcademicCap, HiOutlineCalendar, HiOutlineClipboardCheck, HiOutlineChartBar, HiOutlineDocumentReport, HiOutlineUser, HiOutlineLogout, HiOutlineCog, HiOutlineMoon, HiOutlineSun, HiOutlineMenu, HiOutlineX, HiOutlineShoppingCart, HiOutlineShieldCheck } from 'react-icons/hi';
+import { HiOutlineHome, HiOutlineUserGroup, HiOutlineAcademicCap, HiOutlineCalendar, HiOutlineClipboardCheck, HiOutlineChartBar, HiOutlineDocumentReport, HiOutlineUser, HiOutlineLogout, HiOutlineCog, HiOutlineMoon, HiOutlineSun, HiOutlineMenu, HiOutlineX, HiOutlineShoppingCart, HiOutlineShieldCheck, HiOutlineChatAlt2 } from 'react-icons/hi';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
@@ -15,6 +15,7 @@ const navItems = [
   { path: '/grades', label: 'Grades', icon: HiOutlineChartBar },
   { path: '/reports', label: 'Reports', icon: HiOutlineDocumentReport },
   { path: '/tasks', label: 'Admission', icon: HiOutlineCog },
+  { path: '/feedback', label: 'Feedback', icon: HiOutlineChatAlt2 },
 ];
 
 const pageTitles = {
@@ -27,6 +28,7 @@ const pageTitles = {
   '/reports': 'Reports',
   '/profile': 'Profile',
   '/tasks': 'Admission Checker',
+  '/feedback': 'Feedback',
   '/admin/tutors': 'Tutor Management',
 };
 

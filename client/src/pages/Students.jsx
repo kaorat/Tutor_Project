@@ -4,8 +4,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { debounce } from 'lodash';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import API from '../utils/api';
 import useCartStore from '../stores/useCartStore';
+import { StudentFormProvider, useStudentForm } from '../context/StudentFormContext';
 import { HiPlus, HiPencil, HiTrash, HiSearch, HiRefresh, HiArrowLeft, HiArrowRight, HiCheck, HiShoppingCart, HiEye, HiOutlineTrash } from 'react-icons/hi';
 
 // F6.3: Zod schemas for multi-step form
@@ -29,6 +31,13 @@ const DRAFT_KEY = 'student_form_draft';
 const TCAS_API = 'https://my-tcas.s3.ap-southeast-1.amazonaws.com/mytcas/courses.json?ts=19ccb8ee1ee';
 
 export default function Students() {
+  return <StudentFormProvider><StudentsInner /></StudentFormProvider>;
+}
+
+function StudentsInner() {
+  const navigate = useNavigate();
+  // F6.3: Get step/setStep from context instead of local state
+  const { step, setStep } = useStudentForm();
   const [students, setStudents] = useState([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -42,7 +51,7 @@ export default function Students() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  const [step, setStep] = useState(0);
+  // step/setStep from StudentFormContext (F6.3)
   const [courses, setCourses] = useState([]);
   const [uniSearch, setUniSearch] = useState('');
   const coursesRef = useRef([]);
@@ -267,7 +276,7 @@ export default function Students() {
                     <td className="text-xs max-w-[200px] truncate" title={(Array.isArray(s.university) ? s.university : (s.university ? [s.university] : [])).map(u => getUniLabel(u)).join(', ')}>{(Array.isArray(s.university) ? s.university : (s.university ? [s.university] : [])).map(u => getUniLabel(u)).join(', ') || '-'}</td>
                     <td><span className={`badge badge-${s.status === 'active' ? 'success' : 'warning'}`}>{s.status}</span></td>
                     <td className="actions-cell">
-                      <button className="btn btn-glass btn-sm" onClick={() => openDetail(s)} title="View"><HiEye /></button>
+                      <button className="btn btn-glass btn-sm" onClick={() => navigate(`/students/${s._id}`)} title="View Detail"><HiEye /></button>
                       <button className="btn btn-glass btn-sm" onClick={() => openEdit(s)}><HiPencil /></button>
                       <button className="btn btn-danger btn-sm" onClick={() => handleDelete(s._id)}><HiTrash /></button>
                     </td>

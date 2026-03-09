@@ -3,6 +3,7 @@ import API from '../utils/api';
 import toast from 'react-hot-toast';
 import useAuthStore from '../stores/useAuthStore';
 import { HiOutlineUserGroup, HiOutlineAcademicCap, HiOutlineCalendar, HiOutlineClipboardCheck, HiOutlineTrendingUp, HiOutlineStar, HiOutlineLightningBolt } from 'react-icons/hi';
+import PhysicsCurriculum from '../components/PhysicsCurriculum';
 
 // F1.1: Dynamic rank based on XP with Math.random()
 const getRank = (xp) => {
@@ -258,6 +259,9 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* F1.4: Physics Curriculum recursive tree */}
+      <PhysicsCurriculum />
 
       {/* Award XP Modal */}
       {showAwardModal && (

@@ -48,11 +48,17 @@ router.post('/', protect, [
 // 6_2: View grade list
 router.get('/', protect, async (req, res) => {
   try {
-    const { classId, student, assessmentType } = req.query;
+    const { classId, student, assessmentType, minScore, maxScore } = req.query;
     const query = { tutor: resolveTutorId(req) };
     if (classId) query.classId = classId;
     if (student) query.student = student;
     if (assessmentType) query.assessmentType = assessmentType;
+    // F4.4: Advanced score range filtering
+    if (minScore !== undefined || maxScore !== undefined) {
+      query.score = {};
+      if (minScore !== undefined) query.score.$gte = Number(minScore);
+      if (maxScore !== undefined) query.score.$lte = Number(maxScore);
+    }
 
     const grades = await Grade.find(query)
       .populate('student', 'firstName lastName studentId')

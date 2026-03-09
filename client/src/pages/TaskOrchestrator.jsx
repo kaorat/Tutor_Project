@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { HiPlay, HiSearch, HiClock, HiCheckCircle, HiExclamationCircle, HiChartBar } from 'react-icons/hi';
+import { HiPlay, HiSearch, HiClock, HiCheckCircle, HiExclamationCircle, HiChartBar, HiDocumentText, HiRefresh } from 'react-icons/hi';
 import API from '../utils/api';
 
-// F1.5: Async task orchestrator with concurrency limit of 2
+// F1.5: Async task orchestrator — max 2 concurrent tasks
 const MAX_CONCURRENCY = 2;
+const CERT_TASKS_COUNT = 10; // Fixed 10 tasks for certificate generation
 const TCAS_COURSES_API = 'https://my-tcas.s3.ap-southeast-1.amazonaws.com/mytcas/courses.json?ts=19ccb8ee1ee';
 const LY_PROGRAMS_API = 'https://my-tcas.s3.ap-southeast-1.amazonaws.com/mytcas/ly-programs/';
 
@@ -17,6 +18,149 @@ const SCORE_LABELS = {
   a_lv_69: 'A-Level ภาษาอังกฤษ', a_lv_70: 'A-Level ภาษาฝรั่งเศส',
   a_lv_81: 'A-Level คณิตศาสตร์พื้นฐาน', a_lv_82: 'A-Level วิทยาศาสตร์พื้นฐาน',
 };
+
+// F1.5: Certificate Generator — exactly 10 tasks, max 2 concurrent, per-task progress bar
+function CertificateGenerator() {
+  const [certTasks, setCertTasks] = useState([]);
+  const [running, setRunning] = useState(false);
+  const certQueueRef = useRef([]);
+  const certRunningRef = useRef(0);
+  const certIdRef = useRef(0);
+
+  const processCertQueue = useCallback(() => {
+    while (certRunningRef.current < MAX_CONCURRENCY && certQueueRef.current.length > 0) {
+      const taskId = certQueueRef.current.shift();
+      certRunningRef.current++;
+
+      setCertTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'generating', progress: 20 } : t));
+
+      // Simulate certificate generation with randomized delay
+      const delay = 1200 + Math.random() * 1800;
+      const p1 = setTimeout(() => setCertTasks(prev => prev.map(t => t.id === taskId ? { ...t, progress: 55 } : t)), delay * 0.4);
+      const p2 = setTimeout(() => setCertTasks(prev => prev.map(t => t.id === taskId ? { ...t, progress: 80 } : t)), delay * 0.75);
+      setTimeout(() => {
+        clearTimeout(p1); clearTimeout(p2);
+        setCertTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'done', progress: 100 } : t));
+        certRunningRef.current--;
+        processCertQueue();
+      }, delay);
+    }
+  }, []);
+
+  const startGeneration = useCallback(async () => {
+    setRunning(true);
+    certQueueRef.current = [];
+    certRunningRef.current = 0;
+
+    let studentNames = [];
+    try {
+      const res = await API.get('/students', { params: { limit: 10 } });
+      studentNames = (res.data.students || []).slice(0, 10).map(s => `${s.firstName} ${s.lastName}`);
+    } catch {}
+
+    // Pad to exactly 10 tasks if fewer students
+    const SUBJECTS = ['Mechanics', 'Thermodynamics', 'Optics', 'Electromagnetism', 'Quantum Physics', 'Wave Motion', 'Nuclear Physics', 'Kinematics', 'Fluid Dynamics', 'Relativity'];
+    const tasks = Array.from({ length: CERT_TASKS_COUNT }, (_, i) => {
+      const id = ++certIdRef.current;
+      certQueueRef.current.push(id);
+      return {
+        id,
+        label: studentNames[i] ? `Certificate — ${studentNames[i]}` : `Certificate — Student ${i + 1}`,
+        subject: SUBJECTS[i],
+        status: 'queued',
+        progress: 0,
+      };
+    });
+    setCertTasks(tasks);
+    setTimeout(() => processCertQueue(), 50);
+  }, [processCertQueue]);
+
+  const reset = () => { setCertTasks([]); setRunning(false); certRunningRef.current = 0; certQueueRef.current = []; };
+
+  const generatingCount = certTasks.filter(t => t.status === 'generating').length;
+  const queuedCount = certTasks.filter(t => t.status === 'queued').length;
+  const doneCount = certTasks.filter(t => t.status === 'done').length;
+  const allDone = certTasks.length > 0 && certTasks.every(t => t.status === 'done');
+
+  return (
+    <div className="space-y-4">
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-bold flex items-center gap-2"><HiDocumentText className="text-[var(--primary)]" /> Certificate Generator</h3>
+            <p className="text-sm text-[var(--text-secondary)] mt-1">
+              Generate {CERT_TASKS_COUNT} certificates — max <strong>{MAX_CONCURRENCY}</strong> concurrent, rest queue
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {certTasks.length > 0 && <button className="btn btn-glass btn-sm" onClick={reset}><HiRefresh /></button>}
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={startGeneration}
+              disabled={running && !allDone}
+            >
+              <HiPlay /> {certTasks.length === 0 ? `Generate ${CERT_TASKS_COUNT} Certificates` : 'Regenerate'}
+            </button>
+          </div>
+        </div>
+
+        {certTasks.length > 0 && (
+          <>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="text-center p-2 glass-card">
+                <div className="text-xl font-bold text-blue-400">{generatingCount}</div>
+                <div className="text-[10px] text-[var(--text-tertiary)]">Generating</div>
+              </div>
+              <div className="text-center p-2 glass-card">
+                <div className="text-xl font-bold text-yellow-400">{queuedCount}</div>
+                <div className="text-[10px] text-[var(--text-tertiary)]">Waiting</div>
+              </div>
+              <div className="text-center p-2 glass-card">
+                <div className="text-xl font-bold text-green-400">{doneCount}/{CERT_TASKS_COUNT}</div>
+                <div className="text-[10px] text-[var(--text-tertiary)]">Done</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {certTasks.map((task, i) => (
+                <div key={task.id} className="flex items-center gap-3 glass-card p-3">
+                  <div className="w-6 h-6 flex items-center justify-center text-sm shrink-0">
+                    {task.status === 'queued' && <HiClock className="text-yellow-400" />}
+                    {task.status === 'generating' && <HiPlay className="text-blue-400 animate-pulse" />}
+                    {task.status === 'done' && <HiCheckCircle className="text-green-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium truncate">{task.label}</span>
+                      <span className="text-[10px] text-[var(--text-tertiary)] shrink-0 ml-2">{task.subject}</span>
+                    </div>
+                    {/* F1.5: Per-task progress bar */}
+                    <div className="w-full h-1.5 rounded-full bg-[var(--glass-border)] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${task.progress}%`,
+                          background: task.status === 'done' ? '#22c55e' : task.status === 'generating' ? 'var(--accent-color)' : 'transparent',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-xs text-[var(--text-tertiary)] w-8 text-right shrink-0">{task.progress}%</span>
+                </div>
+              ))}
+            </div>
+
+            {allDone && (
+              <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center text-green-400 text-sm font-semibold">
+                ✓ All {CERT_TASKS_COUNT} certificates generated successfully!
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdmissionChecker() {
   const [students, setStudents] = useState([]);
@@ -147,14 +291,35 @@ export default function AdmissionChecker() {
   const completedCount = tasks.filter(t => t.status === 'completed').length;
   const allDone = tasks.length > 0 && tasks.every(t => t.status === 'completed' || t.status === 'error');
 
+  const [activeTab, setActiveTab] = useState('admission');
+
   return (
     <div className="space-y-6">
       <div className="page-header">
         <div>
-          <h2 className="text-2xl font-bold">Admission Checker</h2>
-          <p className="subtitle">Select a student to check admission scores for their target departments (max {MAX_CONCURRENCY} concurrent lookups)</p>
+          <h2 className="text-2xl font-bold">Task Orchestrator</h2>
+          <p className="subtitle">Concurrent task queue — max {MAX_CONCURRENCY} parallel tasks (F1.5)</p>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-[var(--glass-border)]">
+        <button
+          className={`pb-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'admission' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-secondary)]'}`}
+          onClick={() => setActiveTab('admission')}
+        >
+          <span className="flex items-center gap-2"><HiSearch /> Admission Checker</span>
+        </button>
+        <button
+          className={`pb-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'cert' ? 'border-[var(--primary)] text-[var(--primary)]' : 'border-transparent text-[var(--text-secondary)]'}`}
+          onClick={() => setActiveTab('cert')}
+        >
+          <span className="flex items-center gap-2"><HiDocumentText /> Certificate Generator</span>
+        </button>
+      </div>
+
+      {activeTab === 'cert' && <CertificateGenerator />}
+      {activeTab === 'admission' && <>
 
       {/* Step 1: Select student */}
       <div className="glass-card p-6">
@@ -383,6 +548,7 @@ export default function AdmissionChecker() {
           )}
         </>
       )}
+      </>}
     </div>
   );
 }

@@ -3,18 +3,25 @@ import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import useAuthStore from './stores/useAuthStore';
 import useThemeStore from './stores/useThemeStore';
+import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Classes from './pages/Classes';
+import ClassDetail from './pages/ClassDetail';
+import ClassOverview from './pages/ClassOverview';
+import ClassAttendance from './pages/ClassAttendance';
+import ClassStudents from './pages/ClassStudents';
+import StudentDetail from './pages/StudentDetail';
 import Schedules from './pages/Schedules';
 import Attendance from './pages/Attendance';
 import Grades from './pages/Grades';
 import Reports from './pages/Reports';
 import Profile from './pages/Profile';
 import TaskOrchestrator from './pages/TaskOrchestrator';
+import FeedbackForm from './pages/FeedbackForm';
 
 import AdminTutors from './pages/AdminTutors';
 import TutorDetail from './pages/TutorDetail';
@@ -70,13 +77,22 @@ function AppContent() {
           <Route index element={<DefaultRedirect />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="students" element={<Students />} />
+          {/* F2.2: Dynamic /students/:id route */}
+          <Route path="students/:id" element={<StudentDetail />} />
+          {/* F2.4: Nested /classes/:id routes with Outlet */}
           <Route path="classes" element={<Classes />} />
+          <Route path="classes/:id" element={<ClassDetail />}>
+            <Route index element={<ClassOverview />} />
+            <Route path="attendance" element={<ClassAttendance />} />
+            <Route path="students" element={<ClassStudents />} />
+          </Route>
           <Route path="schedules" element={<Schedules />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="grades" element={<Grades />} />
           <Route path="reports" element={<PrivateRoute allowedRoles={['tutor', 'admin']}><Reports /></PrivateRoute>} />
           <Route path="profile" element={<Profile />} />
           <Route path="tasks" element={<TaskOrchestrator />} />
+          <Route path="feedback" element={<FeedbackForm />} />
           <Route path="admin/tutors" element={<PrivateRoute allowedRoles={['admin']}><AdminTutors /></PrivateRoute>} />
           <Route path="admin/tutors/:id" element={<PrivateRoute allowedRoles={['admin']}><TutorDetail /></PrivateRoute>} />
         </Route>
@@ -98,7 +114,12 @@ function AppContent() {
 }
 
 function App() {
-  return <AppContent />;
+  return (
+    // F2.1: ThemeProvider wraps entire app — Context API for dark/light mode
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
 }
 
 export default App;
