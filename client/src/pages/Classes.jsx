@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../utils/api';
 import { HiPlus, HiPencil, HiTrash, HiEye } from 'react-icons/hi';
 
 export default function Classes() {
+  const navigate = useNavigate();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -100,7 +102,7 @@ export default function Classes() {
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <button className="btn btn-glass btn-sm" onClick={() => setShowDetail(c)}><HiEye /> View</button>
+                <button className="btn btn-glass btn-sm" onClick={() => navigate(`/classes/${c._id}`)}><HiEye /> View</button>
                 <button className="btn btn-glass btn-sm" onClick={() => openEdit(c)}><HiPencil /></button>
                 <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c._id)}><HiTrash /></button>
               </div>

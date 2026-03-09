@@ -44,12 +44,23 @@ const SCHEMAS = [
       { name: 'category', label: 'Category', type: 'select', options: ['Teaching Clarity', 'Problem Solving', 'Lab Work', 'Exam Preparation', 'Overall Experience'], required: true },
       { name: 'isAnonymous', label: 'Submit Anonymously?', type: 'checkbox' },
       { name: 'contactEmail', label: 'Contact Email', type: 'email', show_if: { field: 'isAnonymous', value: false } },
+      // F6.5: nested group field — FieldRenderer calls itself recursively for sub-fields
+      {
+        name: 'scores',
+        label: 'Score Breakdown',
+        type: 'group',
+        fields: [
+          { name: 'clarity', label: 'Clarity Score (1-10)', type: 'number', min: 1, max: 10, required: true },
+          { name: 'pacing', label: 'Pacing Score (1-10)', type: 'number', min: 1, max: 10, required: true },
+          { name: 'engagement', label: 'Engagement Score (1-10)', type: 'number', min: 1, max: 10 },
+        ],
+      },
       { name: 'feedback', label: 'Feedback', type: 'textarea', required: true, minLength: 10 },
     ],
   },
 ];
 
-// F6.5: Runtime Zod schema generation from JSON config
+// F6.5: Runtime Zod schema generation from JSON config (supports nested groups)
 function buildZodSchema(fields, watchValues) {
   const shape = {};
   for (const field of fields) {
@@ -57,6 +68,12 @@ function buildZodSchema(fields, watchValues) {
     if (field.show_if) {
       const depVal = watchValues?.[field.show_if.field];
       if (depVal !== field.show_if.value) continue;
+    }
+    // F6.5: Recurse into group sub-fields and flatten into top-level shape
+    if (field.type === 'group' && Array.isArray(field.fields)) {
+      const subShape = buildZodSchema(field.fields, watchValues);
+      Object.assign(shape, subShape.shape);
+      continue;
     }
     let fieldSchema;
     switch (field.type) {
@@ -84,7 +101,7 @@ function buildZodSchema(fields, watchValues) {
   return z.object(shape);
 }
 
-// F6.5: Recursive field renderer component
+// F6.5: Recursive field renderer — handles group type by calling itself for each sub-field
 function FieldRenderer({ field, control, errors, watch }) {
   const watchValues = watch();
 
@@ -92,6 +109,18 @@ function FieldRenderer({ field, control, errors, watch }) {
   if (field.show_if) {
     const depVal = watchValues[field.show_if.field];
     if (depVal !== field.show_if.value) return null;
+  }
+
+  // F6.5: Group type — render a titled card with recursive FieldRenderer calls for each child
+  if (field.type === 'group' && Array.isArray(field.fields)) {
+    return (
+      <div className="glass-card p-4 space-y-3">
+        <h4 className="text-sm font-semibold text-[var(--primary)] border-b border-[var(--glass-border)] pb-2">{field.label}</h4>
+        {field.fields.map(subField => (
+          <FieldRenderer key={subField.name} field={subField} control={control} errors={errors} watch={watch} />
+        ))}
+      </div>
+    );
   }
 
   const error = errors[field.name];
@@ -163,6 +192,19 @@ function FieldRenderer({ field, control, errors, watch }) {
   );
 }
 
+// F6.5: Flatten fields (including group sub-fields) for defaultValues
+function flattenFields(fields) {
+  const result = [];
+  for (const f of fields) {
+    if (f.type === 'group' && Array.isArray(f.fields)) {
+      result.push(...flattenFields(f.fields));
+    } else {
+      result.push(f);
+    }
+  }
+  return result;
+}
+
 export default function DynamicFormEngine() {
   const [selectedSchema, setSelectedSchema] = useState(SCHEMAS[0]);
   const [view, setView] = useState('form'); // form | json | preview
@@ -172,7 +214,7 @@ export default function DynamicFormEngine() {
   // Build runtime Zod from selected schema
   const { control, handleSubmit, watch, reset, formState: { errors } } = useForm({
     resolver: zodResolver(buildZodSchema(selectedSchema.fields, undefined)),
-    defaultValues: selectedSchema.fields.reduce((acc, f) => {
+    defaultValues: flattenFields(selectedSchema.fields).reduce((acc, f) => {
       acc[f.name] = f.type === 'checkbox' ? false : f.type === 'number' ? '' : '';
       return acc;
     }, {}),
@@ -187,7 +229,7 @@ export default function DynamicFormEngine() {
 
   const switchSchema = (schema) => {
     setSelectedSchema(schema);
-    reset(schema.fields.reduce((acc, f) => {
+    reset(flattenFields(schema.fields).reduce((acc, f) => {
       acc[f.name] = f.type === 'checkbox' ? false : f.type === 'number' ? '' : '';
       return acc;
     }, {}));
