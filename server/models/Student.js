@@ -15,6 +15,8 @@ const studentSchema = new mongoose.Schema({
   tags: [{ type: String, trim: true }],
   xp: { type: Number, default: 0 },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  // F4.2: birthday for age virtual
+  birthday: { type: Date, default: null },
   // F4.2: Soft delete fields
   isDeleted: { type: Boolean, default: false },
   deletedAt: { type: Date, default: null },
@@ -24,6 +26,13 @@ const studentSchema = new mongoose.Schema({
 // F4.5: Virtual field fullName
 studentSchema.virtual('fullName').get(function() {
   return `${this.firstName} ${this.lastName}`;
+});
+
+// F4.2: Virtual field age computed from birthday (not stored in DB)
+studentSchema.virtual('age').get(function() {
+  if (!this.birthday) return null;
+  const diff = Date.now() - new Date(this.birthday).getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
 });
 
 // F4.2: Query middleware to filter soft-deleted by default
