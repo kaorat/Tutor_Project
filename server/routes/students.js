@@ -32,13 +32,14 @@ router.post('/', protect, [
     // F5.4: Zod server-side validation
     const zodResult = studentCreateSchema.safeParse(req.body);
     if (!zodResult.success) {
-      return res.status(400).json({ errors: zodResult.error.errors.map(e => ({ msg: e.message, path: e.path.join('.') })) });
+      return res.status(400).json({ errors: zodResult.error.issues.map(e => ({ msg: e.message, path: e.path.join('.') })) });
     }
 
     const student = new Student({ ...req.body, tutor: resolveTutorId(req) });
     await student.save();
     res.status(201).json(student);
   } catch (error) {
+    console.error('Student create error:', error.message, error);
     if (error.code === 11000) return res.status(400).json({ message: 'Student ID already exists' });
     res.status(500).json({ message: 'Server error' });
   }
@@ -47,7 +48,7 @@ router.post('/', protect, [
 // View student list with search, filter, pagination, multi-tag search ($all) (F4.4)
 router.get('/', protect, async (req, res) => {
   try {
-    const { search, status, tags, page = 1, limit = 50 } = req.query;
+    const { search, status, tags, grades, page = 1, limit = 50 } = req.query;
     const query = { tutor: resolveTutorId(req) };
     if (status) query.status = status;
     if (search) {
@@ -62,6 +63,12 @@ router.get('/', protect, async (req, res) => {
     if (tags) {
       const tagArray = tags.split(',').map(t => t.trim());
       query.tags = { $all: tagArray };
+    }
+    if (grades) {
+      const gradeArray = grades.split(',').map(g => g.trim()).filter(Boolean);
+      if (gradeArray.length) {
+        query.grade = { $in: gradeArray };
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);

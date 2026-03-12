@@ -4,12 +4,13 @@ import { body, validationResult } from 'express-validator';
 import User from '../models/User.js';
 import protect from '../middleware/auth.js';
 import { blacklistToken } from '../middleware/auth.js';
+import { circuitBreaker } from '../middleware/circuitBreaker.js';
 
 const router = express.Router();
 
-// F5.2: JWT via HttpOnly cookie, 15min expiry
+// F5.2: JWT via HttpOnly cookie, 7-day expiry
 const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
 const sendTokenCookie = (res, token) => {
@@ -17,7 +18,7 @@ const sendTokenCookie = (res, token) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 };
 
@@ -45,8 +46,8 @@ router.post('/register', [
   }
 });
 
-// Login
-router.post('/login', [
+// Login — F3.3: rate limited to 5 attempts per 10s per IP
+router.post('/login', circuitBreaker, [
   body('email').isEmail().withMessage('Valid email is required'),
   body('password').notEmpty().withMessage('Password is required')
 ], async (req, res) => {

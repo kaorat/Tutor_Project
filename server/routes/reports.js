@@ -5,6 +5,7 @@ import Class from '../models/Class.js';
 import Schedule from '../models/Schedule.js';
 import Attendance from '../models/Attendance.js';
 import Grade from '../models/Grade.js';
+import MobileSync from '../models/MobileSync.js';
 import protect from '../middleware/auth.js';
 import { resolveTutorId } from '../middleware/auth.js';
 
@@ -84,7 +85,8 @@ router.get('/attendance-report', protect, async (req, res) => {
   try {
     const { classId, startDate, endDate } = req.query;
     const query = { tutor: resolveTutorId(req) };
-    if (classId) query.classId = classId;
+    // _all means no class filter
+    if (classId && classId !== '_all') query.classId = classId;
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -122,6 +124,25 @@ router.get('/class-summary/:classId', protect, async (req, res) => {
   try {
     const classId = req.params.classId;
     const tutorId = resolveTutorId(req);
+
+    // _all means aggregate across all classes
+    if (classId === '_all') {
+      const [classes, grades, attendances, schedules] = await Promise.all([
+        Class.find({ tutor: tutorId }, 'name subject'),
+        Grade.find({ tutor: tutorId }).populate('student', 'firstName lastName studentId'),
+        Attendance.find({ tutor: tutorId }).populate('records.student', 'firstName lastName studentId'),
+        Schedule.find({ tutor: tutorId }),
+      ]);
+      return res.json({
+        class: null,
+        allClasses: classes,
+        totalSchedules: schedules.length,
+        completedSchedules: schedules.filter(s => s.status === 'completed').length,
+        totalGrades: grades.length,
+        totalAttendanceSessions: attendances.length,
+        studentSummaries: [],
+      });
+    }
 
     const [classDoc, schedules, grades, attendances] = await Promise.all([
       Class.findOne({ _id: classId, tutor: tutorId }).populate('students', 'firstName lastName studentId'),
@@ -232,6 +253,39 @@ router.get('/grade-analytics', protect, async (req, res) => {
     ]);
 
     res.json(analytics);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mobile helper endpoints for offline queue payloads
+router.post('/mobile-sync', protect, async (req, res) => {
+  try {
+    const { type, payload } = req.body;
+    if (!type || !payload) {
+      return res.status(400).json({ message: 'type and payload are required' });
+    }
+
+    const entry = await MobileSync.create({
+      tutor: resolveTutorId(req),
+      type,
+      payload,
+      status: 'synced',
+      syncedAt: new Date(),
+    });
+
+    res.status(201).json({ message: 'Sync entry stored', entry });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+router.get('/mobile-sync', protect, async (req, res) => {
+  try {
+    const entries = await MobileSync.find({ tutor: resolveTutorId(req) })
+      .sort({ createdAt: -1 })
+      .limit(25);
+    res.json(entries);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

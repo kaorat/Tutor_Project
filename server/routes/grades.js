@@ -31,7 +31,7 @@ router.post('/', protect, [
     // F5.4: Zod server-side validation
     const zodResult = gradeCreateSchema.safeParse(req.body);
     if (!zodResult.success) {
-      return res.status(400).json({ errors: zodResult.error.errors.map(e => ({ msg: e.message, path: e.path.join('.') })) });
+      return res.status(400).json({ errors: zodResult.error.issues.map(e => ({ msg: e.message, path: e.path.join('.') })) });
     }
 
     const grade = new Grade({ ...req.body, tutor: resolveTutorId(req) });

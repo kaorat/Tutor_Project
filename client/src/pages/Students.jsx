@@ -51,6 +51,22 @@ function StudentsInner() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [gradeFilters, setGradeFilters] = useState([]);
+
+  const toggleGradeFilter = (grade) => {
+    setGradeFilters(prev => {
+      if (prev.includes(grade)) {
+        return prev.filter(g => g !== grade);
+      }
+      return [...prev, grade];
+    });
+    setPage(1);
+  };
+
+  const clearGradeFilters = () => {
+    setGradeFilters([]);
+    setPage(1);
+  };
   // step/setStep from StudentFormContext (F6.3)
   const [courses, setCourses] = useState([]);
   const [uniSearch, setUniSearch] = useState('');
@@ -81,9 +97,11 @@ function StudentsInner() {
   const debouncedSet = useMemo(() => debounce((v) => setDebouncedSearch(v), 600), []);
   const handleSearch = (e) => { setSearch(e.target.value); setPage(1); debouncedSet(e.target.value); };
 
+  const gradeFilterKey = useMemo(() => gradeFilters.join(','), [gradeFilters]);
+
   const fetchStudents = useCallback(() => {
     setLoading(true); setFetchError(false);
-    API.get('/students', { params: { search: debouncedSearch, page, limit: 20 } })
+    API.get('/students', { params: { search: debouncedSearch, page, limit: 20, grades: gradeFilterKey || undefined } })
       .then(res => {
         setStudents(res.data.students || []);
         setTotalPages(res.data.pages || 1);
@@ -91,7 +109,7 @@ function StudentsInner() {
         setLoading(false);
       })
       .catch(() => { setFetchError(true); setLoading(false); });
-  }, [debouncedSearch, page]);
+  }, [debouncedSearch, page, gradeFilterKey]);
 
   const fetchTrash = () => {
     API.get('/students/trash').then(res => setTrashStudents(res.data)).catch(() => {});
@@ -127,10 +145,11 @@ function StudentsInner() {
   // F6.3: Multi-step form with Zod
   const defaultVals = { firstName: '', lastName: '', email: '', phone: '', grade: '', school: '', university: [] };
   const savedDraft = localStorage.getItem(DRAFT_KEY);
-  const { register, handleSubmit, reset, trigger, getValues, setValue, setError, clearErrors, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, trigger, getValues, setValue, setError, clearErrors, watch, formState: { errors } } = useForm({
     defaultValues: savedDraft ? JSON.parse(savedDraft) : defaultVals,
     mode: 'onBlur',
   });
+  const watchValues = watch();
 
   // F6.3: localStorage persistence
   const saveDraft = () => localStorage.setItem(DRAFT_KEY, JSON.stringify(getValues()));
@@ -186,11 +205,47 @@ function StudentsInner() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Move this student to trash?')) return;
+    const prevStudents = students;
+    const prevSelected = new Set(selected);
+
+    // Optimistic UI: remove immediately
+    setStudents(prev => prev.filter(s => s._id !== id));
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
     try {
-      await API.delete(`/students/${id}`);
-      toast.success('Student moved to trash');
-      fetchStudents();
-    } catch { toast.error('Failed to delete'); }
+      const MAX_RETRIES = 3;
+      let attempt = 0;
+      let lastError;
+      while (attempt < MAX_RETRIES) {
+        attempt++;
+        try {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            throw new Error('offline');
+          }
+          await API.delete(`/students/${id}`);
+          toast.success('Student moved to trash');
+          fetchStudents();
+          return;
+        } catch (err) {
+          lastError = err;
+          if (attempt >= MAX_RETRIES) throw err;
+          await new Promise(r => setTimeout(r, 400 * attempt));
+        }
+      }
+    } catch (err) {
+      const isOffline = err?.message === 'offline' || err?.message === 'Network Error';
+      if (isOffline) {
+        await new Promise(r => setTimeout(r, 600));
+      }
+      // Restore previous state
+      setStudents(prevStudents);
+      setSelected(prevSelected);
+      toast.error(isOffline ? 'Offline — delete failed after retries, restored list.' : 'Failed to delete student after retries, restored list.');
+    }
   };
 
   const handleRestore = async (id) => {
@@ -226,6 +281,33 @@ function StudentsInner() {
           <HiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
           <input className="form-control pl-10 w-full" placeholder="Search students (600ms debounce)..." value={search} onChange={handleSearch} />
         </div>
+      </div>
+
+      <div className="glass-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold">Filter by grade</p>
+          <button type="button" className="text-xs text-[var(--text-secondary)] hover:text-[var(--primary)]" onClick={clearGradeFilters} disabled={gradeFilters.length === 0}>
+            Clear
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {GRADE_OPTIONS.map(grade => {
+            const active = gradeFilters.includes(grade);
+            return (
+              <button
+                type="button"
+                key={grade}
+                onClick={() => toggleGradeFilter(grade)}
+                className={`px-3 py-1.5 rounded-xl text-sm border transition-all ${active ? 'bg-[var(--primary)]/20 border-[var(--primary)] text-[var(--primary)]' : 'bg-[var(--glass-bg)] border-[var(--glass-border)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}
+              >
+                {grade}
+              </button>
+            );
+          })}
+        </div>
+        {gradeFilters.length > 0 && (
+          <p className="text-xs text-[var(--text-tertiary)] mt-3">{gradeFilters.length} grade filter{gradeFilters.length > 1 ? 's' : ''} active</p>
+        )}
       </div>
 
       {/* F6.2: Skeleton loading */}
@@ -377,7 +459,7 @@ function StudentsInner() {
                     </div>
                   </div>
                 )}
-                {/* Step 3: University Goal */}
+                {/* Step 3: University Goal + Review */}
                 {step === 2 && (
                   <div className="space-y-4">
                     <div className="form-group">
@@ -435,6 +517,43 @@ function StudentsInner() {
                       {courses.length === 0 && (
                         <p className="text-xs text-[var(--text-tertiary)] mt-2">Loading university data...</p>
                       )}
+                    </div>
+
+                    <div className="glass-card p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold">Review before adding</h4>
+                        <span className="text-xs text-[var(--text-tertiary)]">Make sure everything looks right</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">Full Name</p>
+                          <p className="font-medium">{`${watchValues.firstName || '-' } ${watchValues.lastName || ''}`.trim()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">Email</p>
+                          <p>{watchValues.email || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">Phone</p>
+                          <p>{watchValues.phone || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">Grade</p>
+                          <p>{watchValues.grade || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">School</p>
+                          <p>{watchValues.school || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wide">University Goals</p>
+                          <p className="text-xs text-[var(--text-secondary)]">
+                            {(watchValues.university || []).length > 0
+                              ? (watchValues.university || []).map(uid => getUniLabel(uid)).join(', ')
+                              : '—'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

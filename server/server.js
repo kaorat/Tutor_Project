@@ -17,7 +17,6 @@ import attendanceRoutes from './routes/attendance.js';
 import gradeRoutes from './routes/grades.js';
 import reportRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
-import { circuitBreaker } from './middleware/circuitBreaker.js';
 
 config();
 
@@ -33,8 +32,20 @@ app.use(morgan('dev'));
 app.use(helmet());
 
 // CORS with credentials for HttpOnly cookies (F5.2)
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:8081', 'http://localhost:8082', 'http://localhost:19006'];
+const configuredOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '').split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...configuredOrigins.filter(Boolean)]));
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    console.warn(`Blocked CORS origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 
@@ -48,9 +59,6 @@ app.use((req, res, next) => {
   res.setHeader('X-Student-ID', req.headers['x-student-id'] || 'anonymous');
   next();
 });
-
-// F3.3: Circuit breaker — 5 requests per 10s per IP, returns 429
-app.use('/api', circuitBreaker);
 
 // Routes
 app.use('/api/auth', authRoutes);

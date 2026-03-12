@@ -1,8 +1,8 @@
 // F1.4: Recursive component — Physics curriculum tree structure
-import { useState } from 'react';
-import { HiChevronRight, HiChevronDown, HiBookOpen, HiBeaker, HiLightningBolt } from 'react-icons/hi';
+import { useMemo, useState } from 'react';
+import { HiChevronRight, HiChevronDown, HiBookOpen, HiPlusCircle } from 'react-icons/hi';
 
-const CURRICULUM_TREE = {
+const DEFAULT_TREE = {
   id: 'physics',
   label: 'Physics',
   icon: '⚛',
@@ -88,6 +88,27 @@ const CURRICULUM_TREE = {
   ],
 };
 
+const flattenNodes = (node, prefix = '') => {
+  const currentPath = prefix ? `${prefix} › ${node.label}` : node.label;
+  const nodes = [{ id: node.id, label: currentPath }];
+  node.children?.forEach(child => {
+    nodes.push(...flattenNodes(child, currentPath));
+  });
+  return nodes;
+};
+
+const insertNode = (tree, parentId, newNode) => {
+  if (tree.id === parentId) {
+    return { ...tree, children: [...tree.children, newNode] };
+  }
+  return {
+    ...tree,
+    children: tree.children.map(child => insertNode(child, parentId, newNode)),
+  };
+};
+
+const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `topic-${Date.now()}`;
+
 // F1.4: Recursive CurriculumNode — calls itself for each child
 function CurriculumNode({ node, depth = 0 }) {
   const [expanded, setExpanded] = useState(depth < 1);
@@ -132,14 +153,81 @@ function CurriculumNode({ node, depth = 0 }) {
 }
 
 export default function PhysicsCurriculum() {
+  const [curriculum, setCurriculum] = useState(DEFAULT_TREE);
+  const [form, setForm] = useState({ label: '', icon: '📘', parentId: 'physics' });
+  const [feedback, setFeedback] = useState(null);
+
+  const parentOptions = useMemo(() => flattenNodes(curriculum), [curriculum]);
+
+  const handleAddTopic = (e) => {
+    e.preventDefault();
+    if (!form.label.trim()) {
+      setFeedback({ type: 'error', message: 'Topic name is required.' });
+      return;
+    }
+    const newNode = {
+      id: slugify(form.label),
+      label: form.label.trim(),
+      icon: form.icon?.trim() || '📘',
+      children: [],
+    };
+    setCurriculum(prev => insertNode(prev, form.parentId, newNode));
+    setForm({ ...form, label: '' });
+    setFeedback({ type: 'success', message: 'Topic added. It will disappear on refresh (demo data).' });
+  };
+
   return (
-    <div className="glass-card p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="glass-card p-5 space-y-4">
+      <div className="flex items-center gap-2">
         <HiBookOpen className="text-[var(--primary)] text-xl" />
         <h3 className="font-bold text-lg">Physics Curriculum</h3>
-        <span className="text-xs text-[var(--text-tertiary)] ml-auto">Recursive Tree</span>
+        <span className="text-xs text-[var(--text-tertiary)] ml-auto">Recursive Tree w/ Dynamic Topics</span>
       </div>
-      <CurriculumNode node={CURRICULUM_TREE} depth={0} />
+
+      <form className="grid gap-3 md:grid-cols-[1fr,1fr,auto] items-end" onSubmit={handleAddTopic}>
+        <label className="text-xs font-semibold text-[var(--text-tertiary)] flex flex-col gap-1">
+          Parent Topic
+          <select
+            className="form-control"
+            value={form.parentId}
+            onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))}
+          >
+            {parentOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+          </select>
+        </label>
+
+        <label className="text-xs font-semibold text-[var(--text-tertiary)] flex flex-col gap-1">
+          Topic Label
+          <input
+            className="form-control"
+            placeholder="e.g. Fluid Dynamics"
+            value={form.label}
+            onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+          />
+        </label>
+
+        <label className="text-xs font-semibold text-[var(--text-tertiary)] flex flex-col gap-1">
+          Icon (Emoji)
+          <input
+            className="form-control"
+            maxLength={2}
+            value={form.icon}
+            onChange={e => setForm(f => ({ ...f, icon: e.target.value }))}
+          />
+        </label>
+
+        <button type="submit" className="btn btn-primary flex items-center gap-2">
+          <HiPlusCircle /> Add Topic
+        </button>
+      </form>
+
+      {feedback && (
+        <div className={`text-xs rounded-lg px-3 py-2 ${feedback.type === 'success' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>
+          {feedback.message}
+        </div>
+      )}
+
+      <CurriculumNode node={curriculum} depth={0} />
     </div>
   );
 }
